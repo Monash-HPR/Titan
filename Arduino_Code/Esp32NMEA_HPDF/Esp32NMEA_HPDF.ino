@@ -1,4 +1,4 @@
-#include <HPDF.h>
+
 
 #include <NMEAGPS.h>
 #include <Wire.h>
@@ -6,6 +6,7 @@
 #include <LIS3MDL.h>
 #include <LPS.h>
 #include <Streamers.h>
+#include <HPDF.h>
 
 LSM6 gyro_acc;
 LIS3MDL mag;
@@ -17,11 +18,12 @@ LPS ps;
 int IMU[8];
 float PressMb;
 float tempC;
+#define DEBUG_PORT Serial
 #define RFDPort Serial1
 #define gpsPort Serial2
 
 #define GPS_PORT_NAME "Serial1"
-#define DEBUG_PORT Serial
+
 
 #define TXGPS 18
 #define RXGPS 19
@@ -47,8 +49,8 @@ int ledPin = 13;
 
  //HPDF initialisation
  //Gyroscope
- HPDF_Sensor gyroscope ("A",0.02);
- HPDF_Feed gyro_x (gyroscope.id,0,HPDF::generateControl(gyroscope.id,0),DEBUG_PORT);
+HPDF_Sensor gyroscope ("A",0.02);
+HPDF_Feed gyro_x (gyroscope.id,0,HPDF::generateControl(gyroscope.id,0),&DEBUG_PORT);
 
 float returnGyroX() 
 {
@@ -89,7 +91,7 @@ void setup()
 
 void loop()
 {
-  //GPSloop();
+  GPSloop();
   gyro_x.transmit();
   
 }
@@ -170,7 +172,7 @@ void accprint(Stream &myPort)
 
 
 // prints data stored in GPS fix structure to port specified in function call
-void gpsprint(Stream &myPort) {
+void gpsprint(HardwareSerial myPort) {
   
   if (fix.valid.location) {
     
