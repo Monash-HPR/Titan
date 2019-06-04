@@ -6,11 +6,15 @@
 #include <LIS3MDL.h>
 #include <LPS.h>
 #include <Streamers.h>
+#include <EasyTransfer.h>
 //#include <HPDF.h>
 
 LSM6 gyro_acc;
 LIS3MDL mag;
 LPS ps;
+
+EasyTransfer ET_ACC;
+EasyTransfer ET_GPS;
 
 //print accelerometer data?
 #define PRINT_ACC 1
@@ -43,17 +47,47 @@ static gps_fix  fix;
 
 int ledPin = 13;
 
- //HPDF initialisation
- //Gyroscope
-//HPDF_Sensor gyroscope ("A",0.02);
-//HPDF_Feed gyro_x (gyroscope.id,0,HPDF::generateControl(gyroscope.id,0),&DEBUG_PORT);
+struct ACC_STRUCTURE {
+  //put your variable definitions here for the data you want to send
+  //THIS MUST BE EXACTLY THE SAME ON THE OTHER ARDUINO
+  uint8_t code; //B 1
 
-//float returnGyroX() 
-//{
-//
-//  return static_cast<float>(gyro_acc.g.x);
-// 
-//}
+  int16_t gyrox; //h 2
+  int16_t gyroy; //h 2
+  int16_t gyroz; //h 2
+
+  int16_t accx; //h 2
+  int16_t accy; //h 2
+  int16_t accz; //h 2
+
+  int16_t magx; //h 2
+  int16_t magy; //h 2
+  int16_t magz; //h 2
+
+  int32_t pressuremb; //i 4
+  int16_t tempC; //h 2
+
+
+};
+
+struct GPS_STRUCTURE {
+  //put your variable definitions here for the data you want to send
+  //THIS MUST BE EXACTLY THE SAME ON THE OTHER ARDUINO
+  uint8_t code; // b 1
+
+  int32_t altitudecm; //i 4
+  int32_t latitude; //i 4
+  int32_t longitude;  //i 4
+
+  uint32_t speed_mkn; //I 4
+  uint16_t heading_cd; //H 2
+
+};
+
+ACC_STRUCTURE myAcc;
+
+
+GPS_STRUCTURE myGPS;
 
 void setup()
 {
@@ -78,18 +112,14 @@ void setup()
 
   delay(1000);
 
-  //HPDF function call assignment
-  //gyro_x.source = &returnGyroX;
-
-
-  
+  ET_ACC.begin(details(myAcc), &RFDPort);
+  ET_GPS.begin(details(myGPS), &RFDPort);
 }
 
 void loop()
 {
   GPSloop();
-  //gyro_x.transmit();
-  
+
 }
 
 
@@ -105,7 +135,7 @@ static void doSomeWork()
   // Print all the things!
 
   // trace_all( DEBUG_PORT, gps, fix );
-  gpsprint(RFDPort);
+  gpsprint();
 
 }
 
@@ -118,10 +148,10 @@ static void GPSloop()
     fix = gps.read();
     doSomeWork();
   }
-  
+
   if (PRINT_ACC == 1) {
     //if (Wire.available()) {
-    accprint(RFDPort);
+    accprint();
     //}
   }
 }
@@ -129,71 +159,59 @@ static void GPSloop()
 
 
 // prints accelerometer data to port specified in function call
-void accprint(Stream &myPort)
+void accprint()
 {
-  
+
   gyro_acc.readGyro();
   gyro_acc.readAcc();
   mag.read();
 
-  myPort.print("IMU:");
-  myPort.print(ps.readPressureMillibars());
-  myPort.print(",");
-  myPort.print(ps.readTemperatureRaw());
-  myPort.print(",");
+  myAcc.code = 69; //b 1
 
-  myPort.print(gyro_acc.g.x);
-  myPort.print(",");
-  myPort.print(gyro_acc.g.y);
-  myPort.print(",");
-  myPort.print(gyro_acc.g.z);
-  myPort.print(",");
+  myAcc.gyrox = gyro_acc.g.x; //
+  myAcc.gyroy = gyro_acc.g.y; //
+  myAcc.gyroz = gyro_acc.g.z; //
 
-  myPort.print(gyro_acc.a.x); //>> 4; // shift right 4 bits to use 12-bit representation (1 g = 256)
-  myPort.print(",");
-  myPort.print(gyro_acc.a.y); //>> 4;
-  myPort.print(",");
-  myPort.print(gyro_acc.a.z); //>> 4;
-  myPort.print(",");
+  myAcc.accx = gyro_acc.a.x; //
+  myAcc.accy = gyro_acc.a.y; //
+  myAcc.accz = gyro_acc.a.z; //
 
-  myPort.print(mag.m.x);
-  myPort.print(",");
-  myPort.print(mag.m.y);
-  myPort.print(",");
-  myPort.print(mag.m.z);
-  
-  myPort.println();
-  
+  myAcc.magx = mag.m.x;
+  myAcc.magy = mag.m.y;
+  myAcc.magz = mag.m.z;
+
+  myAcc.pressuremb = ps.readPressureMillibars();
+  myAcc.tempC = ps.readTemperatureRaw();
+
+  ET_ACC.sendData();
 }
 
 
 // prints data stored in GPS fix structure to port specified in function call
-void gpsprint(HardwareSerial myPort) {
-  
+void gpsprint() {
+
   if (fix.valid.location) {
-    
-    myPort.print("GPS:");
-    //trace_all( RFDPort, gps, fix);
-    myPort.print(fix.dateTime.date);
-    myPort.print(fix.dateTime.month);
-    myPort.print(fix.dateTime.year);
-    myPort.print("-");
-    myPort.print(fix.dateTime.hours);
-    myPort.print(fix.dateTime.minutes);
-    myPort.print(fix.dateTime.seconds);
-    myPort.print(fix.dateTime_ms());
-    myPort.print(",");
-    
-    myPort.print(fix.altitude_cm());
-    myPort.print(",");
-    myPort.print(fix.latitudeL());
-    myPort.print(",");
-    myPort.print(fix.longitudeL());
-    myPort.print(",");
-    myPort.print(fix.speed_mkn());
-    myPort.print(",");
-    myPort.print(fix.heading_cd());
-    
-    myPort.println();
+  //    myPort.print(fix.dateTime.date);
+  //    myPort.print(fix.dateTime.month);
+  //    myPort.print(fix.dateTime.year);
+  //    myPort.print("-");
+  //    myPort.print(fix.dateTime.hours);
+  //    myPort.print(fix.dateTime.minutes);
+  //    myPort.print(fix.dateTime.seconds);
+  //    myPort.print(fix.dateTime_ms());
+  //    myPort.print(",");
+
+
+
+  myGPS.code = 254;
+
+  myGPS.altitudecm = fix.altitude_cm();
+  myGPS.latitude = fix.latitudeL();
+  myGPS.longitude = fix.longitudeL();
+
+  myGPS.speed_mkn = fix.speed_mkn();
+  myGPS.heading_cd = fix.heading_cd();
+
+  ET_GPS.sendData();
   }
 }

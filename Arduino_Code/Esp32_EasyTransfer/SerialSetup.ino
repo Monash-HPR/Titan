@@ -21,6 +21,7 @@ void enableGyroAcc() {
   gyro_acc.init();
   gyro_acc.enableDefault();
   gyro_acc.writeReg(LSM6::CTRL2_G, 0x4C); // 104 Hz, 2000 dps full scale
+  gyro_acc.writeReg(LSM6::CTRL1_XL, 0x44); // 104 Hz, +-16 g full scale
   DEBUG_PORT.println("Gyro / Accelerometer Enabled");
 }
 
