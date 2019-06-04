@@ -66,6 +66,7 @@ struct ACC_STRUCTURE {
 
   int32_t pressuremb; //i 4
   int16_t tempC; //h 2
+  // checksum B?
 
 
 };
@@ -191,27 +192,27 @@ void accprint()
 void gpsprint() {
 
   if (fix.valid.location) {
-  //    myPort.print(fix.dateTime.date);
-  //    myPort.print(fix.dateTime.month);
-  //    myPort.print(fix.dateTime.year);
-  //    myPort.print("-");
-  //    myPort.print(fix.dateTime.hours);
-  //    myPort.print(fix.dateTime.minutes);
-  //    myPort.print(fix.dateTime.seconds);
-  //    myPort.print(fix.dateTime_ms());
-  //    myPort.print(",");
+    //    myPort.print(fix.dateTime.date);
+    //    myPort.print(fix.dateTime.month);
+    //    myPort.print(fix.dateTime.year);
+    //    myPort.print("-");
+    //    myPort.print(fix.dateTime.hours);
+    //    myPort.print(fix.dateTime.minutes);
+    //    myPort.print(fix.dateTime.seconds);
+    //    myPort.print(fix.dateTime_ms());
+    //    myPort.print(",");
 
 
 
-  myGPS.code = 254;
+    myGPS.code = 254;
 
-  myGPS.altitudecm = fix.altitude_cm();
-  myGPS.latitude = fix.latitudeL();
-  myGPS.longitude = fix.longitudeL();
+    myGPS.altitudecm = fix.altitude_cm();
+    myGPS.latitude = fix.latitudeL();
+    myGPS.longitude = fix.longitudeL();
 
-  myGPS.speed_mkn = fix.speed_mkn();
-  myGPS.heading_cd = fix.heading_cd();
+    myGPS.speed_mkn = fix.speed_mkn();
+    myGPS.heading_cd = fix.heading_cd();
 
-  ET_GPS.sendData();
+    ET_GPS.sendData();
   }
 }
