@@ -21,11 +21,18 @@ curve_xdata = list()
 size = 500
 buffersize = 2*500
 
+movingavg_size = 20
+movingavg_buffersize = 2*20
+
 curr_longitude = 0
 curr_latitude = 0
 curr_altitude = 0
 initialized = 0
 fix = 0
+alt_min = -1000
+alt_max = 1000
+
+InitPressure = None
 
 ET.register_namespace("","http://www.opengis.net/kml/2.2")
 timestr = time.strftime("%d%m%Y-%H%M")
@@ -96,6 +103,8 @@ buffer2 = np.zeros(buffersize+1, int)
 buffer3 = np.zeros(buffersize+1, int)
 altitude_buffer = np.zeros(buffersize+1, int)
 
+movingavg_buffer = np.zeros(movingavg_buffersize+1, int)
+
 x = 0
 
 # primary loop called by PyQtPlot timer update. Set dt to 0 to stop lag and update on new packet received
@@ -103,7 +112,7 @@ x = 0
 
 def update():
     global curve1, curve2, x, size, buffersize, lastByte, nextByte, initialized, fix, curr_latitude, curr_longitude, \
-        curr_altitude, gps_coords, gps_string, tree, root, newPacket
+        curr_altitude, gps_coords, gps_string, tree, root, newPacket, InitPressure, alt_min, alt_max
 
     nextByte = bytes(ser.read())
 
@@ -122,9 +131,9 @@ def update():
                 if payload[0] == 254 and len(payload) == 25:
 
                     gpsPacket = struct.unpack('B iii IH hb', payload)
-                    print(gpsPacket)
+                    # print(gpsPacket)
                     if gpsPacket[6] == 0:
-                        print(gpsPacket)
+                        # print(gpsPacket)
 
                         if gpsPacket[2] == 0 and gpsPacket[3] == 0:
                             print('No Fix')
@@ -145,22 +154,50 @@ def update():
                 if payload[0] == 69 and len(payload) == 29:
 
                     # print(len(payload))
-                    accPacket = struct.unpack('B hhh hhh hhh i h hB', payload)
-                    # print(accPacket)
+                    accPacket = struct.unpack('B hhh hhh hhh f h hB', payload)
+
                     if accPacket[len(accPacket)-2] == 0:
-                        # print(accPacket)
+                        print(accPacket)
+                        if InitPressure is None:
+                            InitPressure = accPacket[10]
+
                         try:
-                            altitudeM = 0.3048 * ((1 - math.pow(accPacket[10] / 1013.25, 0.190284)) * 145366.45)
+                            # there was a situation before where this math function could throw a value error
+                            # this situation may be resolved by transmitting the raw float as it does currently
 
-                            if altitudeM > -10000:
+                            # altitudeM = 0.3048 * ((1 - math.pow(accPacket[10] / 1013.25, 0.190284)) * 145366.45)
+                            altitudeM = (1 - math.pow(accPacket[10] / InitPressure, 0.190263)) * 44330.8
+                            # print(altitudeM)
+                            # print(initPressure)
 
-                                altitude_counter = altitude_buffer[buffersize]
-                                altitude_buffer[altitude_counter] = altitude_buffer[altitude_counter + size] = float(altitudeM)
-                                altitude_buffer[buffersize] = altitude_counter = (altitude_counter + 1) % size
+                            if altitudeM > -10000:  # another test for bad packets
+                                # increment the x axis position of the graphs
+                                x += 1
 
-                                altitude_curve.setData(altitude_buffer[altitude_counter:altitude_counter + size])
-                                altitude_curve.setPos(x, 0)
-                                # print(altitudeM)
+                                # moving average of the altitude
+
+
+                                # if the most recently calculated altitude is within
+                                # 5 standard deviations of the running average then:
+                                if altitudeM > alt_min or altitudeM < alt_max:
+
+                                    z = movingavg_buffer[movingavg_buffersize]
+                                    movingavg_buffer[z] = movingavg_buffer[z + movingavg_size] = altitudeM
+                                    movingavg_buffer[movingavg_buffersize] = z = (z + 1) % movingavg_size
+
+                                    alt_min = np.mean(movingavg_buffer[z:z + movingavg_size]) - 4 * np.std(
+                                        movingavg_buffer[z:z + movingavg_size])
+                                    alt_max = np.mean(movingavg_buffer[z:z + movingavg_size]) + 4 * np.std(
+                                        movingavg_buffer[z:z + movingavg_size])
+
+                                    altitude_counter = altitude_buffer[buffersize]
+                                    altitude_buffer[altitude_counter] = altitude_buffer[altitude_counter + size] = altitudeM
+                                    altitude_buffer[buffersize] = altitude_counter = (altitude_counter + 1) % size
+
+                                    altitude_curve.setData(altitude_buffer[altitude_counter:altitude_counter + size])
+                                    altitude_curve.setPos(x, 0)
+                                    # print(altitudeM)
+                                    # print(np.std(movingavg_buffer[z:z + movingavg_size]))
 
                                 # print(accPacket)
                                 gyrox = accPacket[1]
@@ -178,11 +215,11 @@ def update():
                                 pressuremb = accPacket[10]
 
                                 tempC = 42.5 + float(accPacket[11]) / 480
+                                # print(tempC)
                                 f.write(str(accPacket) + '\n')
 
                                 # ======================================================================
                                 # This is the main plotting process
-                                x += 1
 
                                 i = buffer1[buffersize]
                                 buffer1[i] = buffer1[i + size] = (accx * 0.488)
@@ -204,6 +241,10 @@ def update():
 
                                 curve3.setData(buffer3[k:k + size])
                                 curve3.setPos(x, 0)
+
+
+                                print(alt_max)
+                                print(alt_min)
 
                         except ValueError:
                             print('failed packet')

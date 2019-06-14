@@ -64,7 +64,7 @@ struct ACC_STRUCTURE {
   int16_t magy; //h 2
   int16_t magz; //h 2
 
-  int32_t pressuremb; //i 4
+  float pressuremb; //f 4
   int16_t tempC; //h 2
   // checksum B?
 
