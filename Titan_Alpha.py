@@ -1,16 +1,15 @@
 
-from PyQt5 import QtGui, QtCore
-import pyqtgraph as pg
+
 import numpy as np
 import sys
-import math
 import serial
 import struct
 import math
 import time
 import xml.etree.ElementTree as ET
-import kmlparser
 
+from PyQt5 import QtGui, QtCore
+import pyqtgraph as pg
 
 ser = None
 dt = 0  # Time delta in milliseconds
@@ -176,7 +175,6 @@ def update():
 
                                 # moving average of the altitude
 
-
                                 # if the most recently calculated altitude is within
                                 # 5 standard deviations of the running average then:
                                 if altitudeM > alt_min or altitudeM < alt_max:
@@ -185,10 +183,11 @@ def update():
                                     movingavg_buffer[z] = movingavg_buffer[z + movingavg_size] = altitudeM
                                     movingavg_buffer[movingavg_buffersize] = z = (z + 1) % movingavg_size
 
-                                    alt_min = np.mean(movingavg_buffer[z:z + movingavg_size]) - 4 * np.std(
-                                        movingavg_buffer[z:z + movingavg_size])
-                                    alt_max = np.mean(movingavg_buffer[z:z + movingavg_size]) + 4 * np.std(
-                                        movingavg_buffer[z:z + movingavg_size])
+                                    if x > movingavg_buffersize:
+                                        alt_min = np.mean(movingavg_buffer[z:z + movingavg_size]) - 4 * np.std(
+                                            movingavg_buffer[z:z + movingavg_size])
+                                        alt_max = np.mean(movingavg_buffer[z:z + movingavg_size]) + 4 * np.std(
+                                            movingavg_buffer[z:z + movingavg_size])
 
                                     altitude_counter = altitude_buffer[buffersize]
                                     altitude_buffer[altitude_counter] = altitude_buffer[altitude_counter + size] = altitudeM
@@ -242,19 +241,8 @@ def update():
                                 curve3.setData(buffer3[k:k + size])
                                 curve3.setPos(x, 0)
 
-
-                                print(alt_max)
-                                print(alt_min)
-
                         except ValueError:
                             print('failed packet')
-
-
-
-
-
-                        # print(altitudeM)
-                        # app.processEvents()
                         # =======================================================================
     else:
         print('serial not available')
@@ -332,6 +320,7 @@ def update():
         tree.write('NetWork_Current.kml', xml_declaration=True, encoding="UTF-8")
 
         newPacket = 0
+
 
 timer = QtCore.QTimer()
 timer.timeout.connect(update)
