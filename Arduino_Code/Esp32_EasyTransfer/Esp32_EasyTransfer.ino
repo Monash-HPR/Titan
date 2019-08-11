@@ -17,7 +17,7 @@ EasyTransfer ET_ACC;
 EasyTransfer ET_GPS;
 
 //print accelerometer data?
-#define PRINT_ACC 1
+#define PRINT_ACC 0
 #define DEBUG_PORT Serial
 #define RFDPort Serial1
 #define gpsPort Serial2
@@ -96,11 +96,14 @@ void setup()
 
   DEBUG_PORT.begin(115200);
 
-  i2cSetup();
-  enableGyroAcc();
-  enableMag();
-  enableBaro();
 
+  if (PRINT_ACC == 1) {
+    i2cSetup();
+    enableGyroAcc();
+    enableMag();
+    enableBaro();
+  }
+  
   pinMode(ledPin, OUTPUT);    //define LED pin
   digitalWrite(ledPin, HIGH); // Turn on LED pin
 
@@ -114,7 +117,7 @@ void setup()
   delay(1000);
 
   ET_ACC.begin(details(myAcc), &RFDPort);
-  ET_GPS.begin(details(myGPS), &RFDPort);
+  ET_GPS.begin(details(myGPS), &DEBUG_PORT);
 }
 
 void loop()
@@ -150,6 +153,10 @@ static void GPSloop()
     doSomeWork();
   }
 
+  while (!gps.available( gpsPort )) {
+    DEBUG_PORT.println("No Fix");
+  }
+  
   if (PRINT_ACC == 1) {
     //if (Wire.available()) {
     accprint();

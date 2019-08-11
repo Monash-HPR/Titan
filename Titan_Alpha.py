@@ -37,7 +37,7 @@ ET.register_namespace("","http://www.opengis.net/kml/2.2")
 timestr = time.strftime("%d%m%Y-%H%M")
 f = open("Serial-" + timestr + ".txt", 'w')
 
-ser = serial.Serial(port='COM12', baudrate=115200, timeout=2)
+ser = serial.Serial(port='COM14', baudrate=115200, timeout=2)
 
 
 def make_curves(x, px):
@@ -121,18 +121,20 @@ def update():
         lastByte = None
 
     if lastByte:
+        # check the header of the packet
         if lastByte[0] == 6 and nextByte[0] == 133:
 
             mesLength = bytes(ser.read())
             payload = bytes(ser.read(mesLength[0] + 1))
 
             if payload:
+                #Check if GPS packet
                 if payload[0] == 254 and len(payload) == 25:
 
                     gpsPacket = struct.unpack('B iii IH hb', payload)
                     # print(gpsPacket)
                     if gpsPacket[6] == 0:
-                        # print(gpsPacket)
+                        print(gpsPacket)
 
                         if gpsPacket[2] == 0 and gpsPacket[3] == 0:
                             print('No Fix')
@@ -149,7 +151,9 @@ def update():
                             newPacket = 1
 
                             f.write(str(gpsPacket) + '\n')
+                            print(str(gpsPacket))
 
+                #Check if full IMU packet
                 if payload[0] == 69 and len(payload) == 29:
 
                     # print(len(payload))
@@ -198,7 +202,6 @@ def update():
                                     # print(altitudeM)
                                     # print(np.std(movingavg_buffer[z:z + movingavg_size]))
 
-                                # print(accPacket)
                                 gyrox = accPacket[1]
                                 gyroy = accPacket[2]
                                 gyroz = accPacket[3]
@@ -244,6 +247,26 @@ def update():
                         except ValueError:
                             print('failed packet')
                         # =======================================================================
+
+                # check if MPU Packet
+                if payload[0] == 10 and len(payload) == 15:
+                    mpuPacket = struct.unpack('B hhh hhh B', payload)
+                    # print(mpuPacket)
+
+                # check if BME packet
+                if payload[0] == 20 and len(payload) == 17:
+                    # print(len(payload))
+                    bmePacket = struct.unpack('B fff B', payload)
+                    # print(bmePacket)
+
+                # check if HMC packet
+                if payload[0] == 30 and len(payload) == 11:
+                    # print(len(payload))
+                    hmcPacket = struct.unpack('B hhhh B', payload)
+                    # print(hmcPacket)
+
+                    # if mpuPacket[len(mpuPacket) - 2] == 0:
+                        # print(mpuPacket)
     else:
         print('serial not available')
 
