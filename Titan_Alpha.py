@@ -1,16 +1,15 @@
 
-from PyQt5 import QtGui, QtCore
-import pyqtgraph as pg
+
 import numpy as np
 import sys
-import math
 import serial
 import struct
 import math
 import time
 import xml.etree.ElementTree as ET
-import kmlparser
 
+from PyQt5 import QtGui, QtCore
+import pyqtgraph as pg
 
 ser = None
 dt = 0  # Time delta in milliseconds
@@ -38,7 +37,7 @@ ET.register_namespace("","http://www.opengis.net/kml/2.2")
 timestr = time.strftime("%d%m%Y-%H%M")
 f = open("Serial-" + timestr + ".txt", 'w')
 
-ser = serial.Serial(port='COM12', baudrate=115200, timeout=2)
+ser = serial.Serial(port='COM15', baudrate=115200, timeout=2)
 
 
 def make_curves(x, px):
@@ -122,24 +121,26 @@ def update():
         lastByte = None
 
     if lastByte:
+        # check the header of the packet
         if lastByte[0] == 6 and nextByte[0] == 133:
 
             mesLength = bytes(ser.read())
             payload = bytes(ser.read(mesLength[0] + 1))
 
             if payload:
+                #Check if GPS packet
                 if payload[0] == 254 and len(payload) == 25:
+                    cs = len(payload)
+                    for i in payload:
+                        cs ^= i
 
-                    gpsPacket = struct.unpack('B iii IH hb', payload)
-                    # print(gpsPacket)
-                    if gpsPacket[6] == 0:
+                    if cs == 1:
+                        gpsPacket = struct.unpack('B iii IH hb', payload)
                         # print(gpsPacket)
-
                         if gpsPacket[2] == 0 and gpsPacket[3] == 0:
                             print('No Fix')
                             fix = 0
                         else:
-
                             curr_altitude = int(gpsPacket[1]) / 100  # altitude
                             curr_latitude = int(gpsPacket[2]) / 10000000  # lat
                             curr_longitude = int(gpsPacket[3]) / 10000000  # long
@@ -150,7 +151,9 @@ def update():
                             newPacket = 1
 
                             f.write(str(gpsPacket) + '\n')
+                            print(str(gpsPacket))
 
+                # Check if full IMU packet - Redundant but still need to move graphing code out of this packet reading
                 if payload[0] == 69 and len(payload) == 29:
 
                     # print(len(payload))
@@ -176,7 +179,6 @@ def update():
 
                                 # moving average of the altitude
 
-
                                 # if the most recently calculated altitude is within
                                 # 5 standard deviations of the running average then:
                                 if altitudeM > alt_min or altitudeM < alt_max:
@@ -185,10 +187,11 @@ def update():
                                     movingavg_buffer[z] = movingavg_buffer[z + movingavg_size] = altitudeM
                                     movingavg_buffer[movingavg_buffersize] = z = (z + 1) % movingavg_size
 
-                                    alt_min = np.mean(movingavg_buffer[z:z + movingavg_size]) - 4 * np.std(
-                                        movingavg_buffer[z:z + movingavg_size])
-                                    alt_max = np.mean(movingavg_buffer[z:z + movingavg_size]) + 4 * np.std(
-                                        movingavg_buffer[z:z + movingavg_size])
+                                    if x > movingavg_buffersize:
+                                        alt_min = np.mean(movingavg_buffer[z:z + movingavg_size]) - 4 * np.std(
+                                            movingavg_buffer[z:z + movingavg_size])
+                                        alt_max = np.mean(movingavg_buffer[z:z + movingavg_size]) + 4 * np.std(
+                                            movingavg_buffer[z:z + movingavg_size])
 
                                     altitude_counter = altitude_buffer[buffersize]
                                     altitude_buffer[altitude_counter] = altitude_buffer[altitude_counter + size] = altitudeM
@@ -199,7 +202,6 @@ def update():
                                     # print(altitudeM)
                                     # print(np.std(movingavg_buffer[z:z + movingavg_size]))
 
-                                # print(accPacket)
                                 gyrox = accPacket[1]
                                 gyroy = accPacket[2]
                                 gyroz = accPacket[3]
@@ -242,20 +244,43 @@ def update():
                                 curve3.setData(buffer3[k:k + size])
                                 curve3.setPos(x, 0)
 
-
-                                print(alt_max)
-                                print(alt_min)
-
                         except ValueError:
                             print('failed packet')
-
-
-
-
-
-                        # print(altitudeM)
-                        # app.processEvents()
                         # =======================================================================
+
+                # check if MPU Packet
+                if payload[0] == 10 and len(payload) == 15:
+                    cs = len(payload)
+                    for i in payload:
+                        cs ^= i
+
+                    if cs == 1:
+                        mpuPacket = struct.unpack('B hhh hhh B', payload)
+                        f.write(str(mpuPacket) + '\n')
+                        # print(mpuPacket)
+
+                # check if BME packet
+                if payload[0] == 20 and len(payload) == 17:
+                    cs = len(payload)
+                    for i in payload:
+                        cs ^= i
+
+                    if cs == 1:
+                        bmePacket = struct.unpack('B fff B', payload)
+                        f.write(str(bmePacket) + '\n')
+                        # print(bmePacket)
+
+                # check if HMC packet
+                if payload[0] == 30 and len(payload) == 11:
+                    cs = len(payload)
+                    for i in payload:
+                        cs ^= i
+
+                    if cs == 1:
+                        hmcPacket = struct.unpack('B hhhh B', payload)
+                        f.write(str(hmcPacket) + '\n')
+                        # print(hmcPacket)
+
     else:
         print('serial not available')
 
@@ -310,9 +335,10 @@ def update():
         tree.write(timestr + '.kml', xml_declaration=True, encoding="UTF-8")
         tree.write('NetWork_Current.kml', xml_declaration=True, encoding="UTF-8")
         root = tree.getroot()
+        # boolean to tell program if kml file for this session has been created
         initialized = 1
 
-    # if the kml file has been initialized and there is still a fix, parse gps data into kml
+    # if the kml file has been created and there is still a fix, parse gps data into kml
     if initialized == 1 and newPacket == 1:
 
         # access the root of the XML tree
@@ -332,6 +358,7 @@ def update():
         tree.write('NetWork_Current.kml', xml_declaration=True, encoding="UTF-8")
 
         newPacket = 0
+
 
 timer = QtCore.QTimer()
 timer.timeout.connect(update)
