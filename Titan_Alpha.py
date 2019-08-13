@@ -37,7 +37,7 @@ ET.register_namespace("","http://www.opengis.net/kml/2.2")
 timestr = time.strftime("%d%m%Y-%H%M")
 f = open("Serial-" + timestr + ".txt", 'w')
 
-ser = serial.Serial(port='COM14', baudrate=115200, timeout=2)
+ser = serial.Serial(port='COM15', baudrate=115200, timeout=2)
 
 
 def make_curves(x, px):
@@ -130,17 +130,17 @@ def update():
             if payload:
                 #Check if GPS packet
                 if payload[0] == 254 and len(payload) == 25:
+                    cs = len(payload)
+                    for i in payload:
+                        cs ^= i
 
-                    gpsPacket = struct.unpack('B iii IH hb', payload)
-                    # print(gpsPacket)
-                    if gpsPacket[6] == 0:
-                        print(gpsPacket)
-
+                    if cs == 1:
+                        gpsPacket = struct.unpack('B iii IH hb', payload)
+                        # print(gpsPacket)
                         if gpsPacket[2] == 0 and gpsPacket[3] == 0:
                             print('No Fix')
                             fix = 0
                         else:
-
                             curr_altitude = int(gpsPacket[1]) / 100  # altitude
                             curr_latitude = int(gpsPacket[2]) / 10000000  # lat
                             curr_longitude = int(gpsPacket[3]) / 10000000  # long
@@ -153,7 +153,7 @@ def update():
                             f.write(str(gpsPacket) + '\n')
                             print(str(gpsPacket))
 
-                #Check if full IMU packet
+                # Check if full IMU packet - Redundant but still need to move graphing code out of this packet reading
                 if payload[0] == 69 and len(payload) == 29:
 
                     # print(len(payload))
@@ -250,23 +250,37 @@ def update():
 
                 # check if MPU Packet
                 if payload[0] == 10 and len(payload) == 15:
-                    mpuPacket = struct.unpack('B hhh hhh B', payload)
-                    # print(mpuPacket)
+                    cs = len(payload)
+                    for i in payload:
+                        cs ^= i
+
+                    if cs == 1:
+                        mpuPacket = struct.unpack('B hhh hhh B', payload)
+                        f.write(str(mpuPacket) + '\n')
+                        # print(mpuPacket)
 
                 # check if BME packet
                 if payload[0] == 20 and len(payload) == 17:
-                    # print(len(payload))
-                    bmePacket = struct.unpack('B fff B', payload)
-                    # print(bmePacket)
+                    cs = len(payload)
+                    for i in payload:
+                        cs ^= i
+
+                    if cs == 1:
+                        bmePacket = struct.unpack('B fff B', payload)
+                        f.write(str(bmePacket) + '\n')
+                        # print(bmePacket)
 
                 # check if HMC packet
                 if payload[0] == 30 and len(payload) == 11:
-                    # print(len(payload))
-                    hmcPacket = struct.unpack('B hhhh B', payload)
-                    # print(hmcPacket)
+                    cs = len(payload)
+                    for i in payload:
+                        cs ^= i
 
-                    # if mpuPacket[len(mpuPacket) - 2] == 0:
-                        # print(mpuPacket)
+                    if cs == 1:
+                        hmcPacket = struct.unpack('B hhhh B', payload)
+                        f.write(str(hmcPacket) + '\n')
+                        # print(hmcPacket)
+
     else:
         print('serial not available')
 
@@ -321,9 +335,10 @@ def update():
         tree.write(timestr + '.kml', xml_declaration=True, encoding="UTF-8")
         tree.write('NetWork_Current.kml', xml_declaration=True, encoding="UTF-8")
         root = tree.getroot()
+        # boolean to tell program if kml file for this session has been created
         initialized = 1
 
-    # if the kml file has been initialized and there is still a fix, parse gps data into kml
+    # if the kml file has been created and there is still a fix, parse gps data into kml
     if initialized == 1 and newPacket == 1:
 
         # access the root of the XML tree
